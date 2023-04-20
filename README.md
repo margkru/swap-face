@@ -8,7 +8,7 @@ Start uvicorn with:
 ```sh
 uvicorn main:app --reload
 ```
-#### Documentation
+#### API docs
 ```sh
 http:/127.0.0.0:8000/docs
 ```
