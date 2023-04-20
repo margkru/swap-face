@@ -1,16 +1,8 @@
-import glob
-import os
-import shutil
 import sys
 
 import cv2
 import numpy as np
-import proglog
-from moviepy.editor import AudioFileClip, VideoFileClip
-from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from scipy.ndimage import gaussian_filter
-from tqdm import tqdm
-import subprocess
 
 from utils.utils import (estimate_norm, get_lm, inverse_estimate_norm,
                          norm_crop, transform_landmark_points)
@@ -86,86 +78,3 @@ def run_inference(source, target, RetinaFace,
     except Exception as e:
         print('\n', e)
         sys.exit(0)
-
-
-def video_swap(opt, face, input_video, RetinaFace, ArcFace, FaceDancer, out_video_filename):
-    video_forcheck = VideoFileClip(input_video)
-
-    if video_forcheck.audio is None:
-        no_audio = True
-    else:
-        no_audio = False
-
-    del video_forcheck
-
-    if not no_audio:
-        video_audio_clip = AudioFileClip(input_video)
-
-    video = cv2.VideoCapture(input_video)
-    ret = True
-    frame_index = 0
-    temp_results_dir = './tmp_frames'
-
-    frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = video.get(cv2.CAP_PROP_FPS)
-
-    if os.path.exists(temp_results_dir):
-        shutil.rmtree(temp_results_dir)
-    os.makedirs(temp_results_dir, exist_ok=True)
-
-    source_z = None
-
-    for frame_index in tqdm(range(frame_count)):
-        ret, frame = video.read()
-        if ret:
-            _, source_z = run_inference(opt, face, frame, RetinaFace, ArcFace, FaceDancer,
-                                        os.path.join('./tmp_frames', 'frame_{:0>7d}.png'.format(frame_index)),
-                                        source_z=source_z)
-    video.release()
-
-    path = os.path.join('./tmp_frames', '*.png')
-    image_filenames = sorted(glob.glob(path))
-    clips = ImageSequenceClip(image_filenames, fps=fps)
-    name = os.path.splitext(out_video_filename)[0]
-
-    if not no_audio:
-        clips = clips.set_audio(video_audio_clip)
-
-    if out_video_filename.lower().endswith('.gif'):
-        print("\nCreating GIF with FFmpeg...")
-        try:
-           subprocess.run('ffmpeg -y -v -8 -f image2 -framerate {} \
-               -i "./tmp_frames/frame_%07d.png" -filter_complex "[0:v]split [a][b];[a] \
-                   palettegen=stats_mode=single [p];[b][p]paletteuse=dither=bayer:bayer_scale=4" \
-                       -y "{}.gif"'.format(fps, name), shell=True, check=True)
-           print("\nGIF created: {}".format(out_video_filename))
-
-        except subprocess.CalledProcessError:
-            print("\nERROR! Failed to export GIF with FFmpeg")
-            print('\n', sys.exc_info())
-            sys.exit(0)
-
-    elif out_video_filename.lower().endswith('.webp'):
-        try:
-            print("\nCreating WEBP with FFmpeg...")
-            subprocess.run('ffmpeg -y -v -8 -f image2 -framerate {} \
-                -i "./tmp_frames/frame_%07d.png" -vcodec libwebp -lossless 0 -q:v 80 -loop 0 -an -vsync 0 \
-                    "{}.webp"'.format(fps, name), shell=True, check=True)
-            print("\nWEBP created: {}".format(out_video_filename))
-
-        except subprocess.CalledProcessError:
-            print("\nERROR! Failed to export WEBP with FFmpeg")
-            print('\n', sys.exc_info())
-            sys.exit(0)
-    else:
-        try:
-            clips.write_videofile(out_video_filename, codec='libx264', audio_codec='aac', ffmpeg_params=[
-                '-pix_fmt:v', 'yuv420p', '-colorspace:v', 'bt709', '-color_primaries:v', 'bt709',
-                '-color_trc:v', 'bt709', '-color_range:v', 'tv', '-movflags', '+faststart'],
-                                  logger=proglog.TqdmProgressBarLogger(print_messages=False))
-        except Exception as e:
-            print("\nERROR! Failed to export video")
-            print('\n', e)
-            sys.exit(0)
-
-        print('\nDone! {}'.format(out_video_filename))

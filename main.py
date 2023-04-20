@@ -1,18 +1,14 @@
 import logging
 import os
 
-import tensorflow as tf
+from fastapi import FastAPI, UploadFile, File
 from starlette.responses import FileResponse
 from tensorflow.keras.models import load_model
 from tensorflow_addons.layers import InstanceNormalization
 
-
 from networks.layers import AdaIN, AdaptiveAttention
 from retinaface.models import *
 from utils.swap_func import run_inference
-from typing import Annotated
-
-from fastapi import FastAPI, UploadFile, File
 
 logging.getLogger().setLevel(logging.ERROR)
 
