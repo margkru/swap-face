@@ -1,11 +1,5 @@
 import tensorflow as tf
-import tensorflow.keras.backend as K
-from tensorflow.keras import constraints, initializers, regularizers
-from tensorflow.keras.layers import (Activation, Add, BatchNormalization,
-                                     Conv2D, Dense, InputSpec, Layer,
-                                     Multiply, ReLU,
-                                     Reshape)
-from tensorflow.python.keras.utils import conv_utils
+from tensorflow.keras.layers import (Dense, Layer)
 
 tf.keras.utils.disable_interactive_logging()
 

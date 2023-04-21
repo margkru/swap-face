@@ -1,16 +1,19 @@
 import logging
 import os
 
+import cv2
+import numpy as np
+from PIL import Image
 from fastapi import FastAPI, UploadFile, File
 from starlette.responses import FileResponse
 from tensorflow.keras.models import load_model
 from tensorflow_addons.layers import InstanceNormalization
 
 from networks.layers import AdaIN, AdaptiveAttention
-from retinaface.models import *
-from utils.swap_func import run_inference
 
 logging.getLogger().setLevel(logging.ERROR)
+
+
 
 app = FastAPI()
 
@@ -26,38 +29,30 @@ async def swap_face(source: UploadFile = File(...), target: UploadFile = File(..
         source_object.write(source.file.read())
         target_object.write(target.file.read())
     new_image_name = create_image(source_path, target_path)
+
     return {'path_to_file': f"{API}/files{new_image_name}"}
 
 @app.get("/files/{file_name}")
 async def open_image(file_name):
-    return FileResponse(f"results/{file_name}")
+    return FileResponse(f"./{file_name}")
 
-def create_image(img_path, swap_source):
+def create_image(source_file, target_file):
+    logging.getLogger().setLevel(logging.ERROR)
 
-    if len(tf.config.list_physical_devices('GPU')) != 0:
-        gpus = tf.config.experimental.list_physical_devices('GPU')
-        tf.config.set_visible_devices(gpus[0], 'GPU')
+    model = load_model("./pretrained_models/FaceDancer_config_c_HQ.h5", compile=False, custom_objects={"AdaIN": AdaIN,
+                                                                          "AdaptiveAttention": AdaptiveAttention,
+                                                                          "InstanceNormalization": InstanceNormalization})
+    arcface = load_model("./pretrained_models/ArcFace-Res50.h5", compile=False)
 
-    retina_path = "pretrained_models/RetinaFace-Res50.h5"
-    arcface_path = "pretrained_models/ArcFace-Res50.h5"
-    facedancer_path = "pretrained_models/FaceDancer_config_c_HQ.h5"
-    print('\nInitializing FaceDancer...')
-    RetinaFace = load_model(retina_path, compile=False,
-                            custom_objects={"FPN": FPN,
-                                            "SSH": SSH,
-                                            "BboxHead": BboxHead,
-                                            "LandmarkHead": LandmarkHead,
-                                            "ClassHead": ClassHead})
-    ArcFace = load_model(arcface_path, compile=False)
+    # target and source images need to be properly cropeed and aligned
+    target = np.asarray(Image.open(target_file).resize((256, 256)))
+    source = np.asarray(Image.open(source_file).resize((112, 112)))
 
-    G = load_model(facedancer_path, compile=False,
-                   custom_objects={"AdaIN": AdaIN,
-                                   "AdaptiveAttention": AdaptiveAttention,
-                                   "InstanceNormalization": InstanceNormalization})
-    G.summary()
-    img_output = 'results/new.jpg'
-    print('\nProcessing: {}'.format(img_path))
-    run_inference(swap_source, img_path,
-                  RetinaFace, ArcFace, G, img_output)
-    print(f'\nDone! {img_output}')
-    return img_output[img_output.rfind('/'):]
+    source_z = arcface(np.expand_dims(source / 255.0, axis=0))
+
+    face_swap = model([np.expand_dims((target - 127.5) / 127.5, axis=0), source_z]).numpy()
+    face_swap = (face_swap[0] + 1) / 2
+    face_swap = np.clip(face_swap * 255, 0, 255).astype('uint8')
+
+    cv2.imwrite("./swapped_face.png", cv2.cvtColor(face_swap, cv2.COLOR_BGR2RGB))
+    return "/swapped_face.png"
