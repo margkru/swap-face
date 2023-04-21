@@ -1,9 +1,8 @@
-tensorflow-addons
+tensorflow
 opencv-python-headless
-scipy
+fastapi
+tensorflow_addons
+Pillow
+python-multipart
+uvicorn
 scikit-image
-moviepy==1.0.3
-imageio
-imageio-ffmpeg
-requests
-tqdm

@@ -14,7 +14,7 @@ logging.getLogger().setLevel(logging.ERROR)
 
 app = FastAPI()
 
-UPLOAD_FOLDER = 'D:/upload_images/'
+UPLOAD_FOLDER = './upload_images/'
 API = 'http://127.0.0.0:8000'
 
 
@@ -25,7 +25,7 @@ async def swap_face(source: UploadFile = File(...), target: UploadFile = File(..
     with open(source_path, "wb+") as source_object, open(target_path, "wb+") as target_object:
         source_object.write(source.file.read())
         target_object.write(target.file.read())
-    new_image_name = create_image(source_path, target_path)
+    new_image_name = create_image(target_path, source_path)
     return {'path_to_file': f"{API}/files{new_image_name}"}
 
 @app.get("/files/{file_name}")
