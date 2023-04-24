@@ -1,11 +1,14 @@
+import datetime
 import logging
 import os
+import uuid
 
 from fastapi import FastAPI, UploadFile, File
 from starlette.responses import FileResponse
-from tensorflow.keras.models import load_model
+from tensorflow.python.keras.models import load_model
 from tensorflow_addons.layers import InstanceNormalization
 
+from db_models import CreatedImagesModel
 from networks.layers import AdaIN, AdaptiveAttention
 from retinaface.models import *
 from utils.swap_func import run_inference
@@ -26,14 +29,17 @@ async def swap_face(source: UploadFile = File(...), target: UploadFile = File(..
         source_object.write(source.file.read())
         target_object.write(target.file.read())
     new_image_name = create_image(target_path, source_path)
+    CreatedImagesModel.add(CreatedImagesModel(creating_date=datetime.datetime.now(), name=new_image_name))
+    CreatedImagesModel.commit()
     return {'path_to_file': f"{API}/files{new_image_name}"}
+
 
 @app.get("/files/{file_name}")
 async def open_image(file_name):
     return FileResponse(f"results/{file_name}")
 
-def create_image(img_path, swap_source):
 
+def create_image(img_path, swap_source):
     if len(tf.config.list_physical_devices('GPU')) != 0:
         gpus = tf.config.experimental.list_physical_devices('GPU')
         tf.config.set_visible_devices(gpus[0], 'GPU')
@@ -47,7 +53,8 @@ def create_image(img_path, swap_source):
                                             "SSH": SSH,
                                             "BboxHead": BboxHead,
                                             "LandmarkHead": LandmarkHead,
-                                            "ClassHead": ClassHead})
+                                            "ClassHead": ClassHead,
+                                            "BatchNormalization": BatchNormalization})
     ArcFace = load_model(arcface_path, compile=False)
 
     G = load_model(facedancer_path, compile=False,
@@ -55,9 +62,10 @@ def create_image(img_path, swap_source):
                                    "AdaptiveAttention": AdaptiveAttention,
                                    "InstanceNormalization": InstanceNormalization})
     G.summary()
-    img_output = 'results/new.jpg'
+    name = str(uuid.uuid4()) + os.path.splitext(img_path)[1]
+    img_output = f'results/{name}'
     print('\nProcessing: {}'.format(img_path))
     run_inference(swap_source, img_path,
                   RetinaFace, ArcFace, G, img_output)
     print(f'\nDone! {img_output}')
-    return img_output[img_output.rfind('/'):]
+    return name

@@ -1,4 +1,5 @@
-tensorflow
+sqlalchemy
+psycopg2-binary
 opencv-python-headless
 fastapi
 tensorflow_addons
